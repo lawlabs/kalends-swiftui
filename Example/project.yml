@@ -1,0 +1,49 @@
+name: KalendsExample
+options:
+  bundleIdPrefix: ru.lawlabs
+  deploymentTarget:
+    iOS: "18.0"
+    macOS: "15.0"
+  xcodeVersion: "16.0"
+  createIntermediateGroups: true
+packages:
+  Kalends:
+    path: ..
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    GENERATE_INFOPLIST_FILE: YES
+    INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+    INFOPLIST_KEY_UILaunchScreen_Generation: YES
+    INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+    INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+    INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+targets:
+  KalendsExample:
+    type: application
+    supportedDestinations: [iOS, macOS]
+    sources:
+      - Sources
+    dependencies:
+      - package: Kalends
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ru.lawlabs.KalendsExample
+        PRODUCT_NAME: KalendsExample
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ENABLE_PREVIEWS: YES
+        # Ad-hoc signing on macOS and no signing in the simulator, so the
+        # sample builds from a clean clone. To run on an iPhone, switch the
+        # target to automatic signing with your team in Xcode.
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        "CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]": "NO"
+        "CODE_SIGNING_ALLOWED[sdk=iphoneos*]": "NO"
+schemes:
+  KalendsExample:
+    build:
+      targets:
+        KalendsExample: all
+    run:
+      config: Debug

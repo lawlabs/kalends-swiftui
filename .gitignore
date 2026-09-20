@@ -1,0 +1,14 @@
+# macOS
+.DS_Store
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# Xcode
+xcuserdata/
+*.xcuserstate
+DerivedData/
+*.xcresult
+Example/*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/

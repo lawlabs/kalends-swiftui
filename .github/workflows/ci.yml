@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  package:
+    name: Package (macOS + iOS Simulator)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Xcode version
+        run: xcodebuild -version
+      - name: Build (macOS)
+        run: swift build
+      - name: Test (macOS)
+        run: swift test
+      - name: Build (iOS Simulator)
+        run: xcodebuild build -quiet -scheme Kalends -destination 'generic/platform=iOS Simulator'
+
+  example:
+    name: Example app
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build (macOS)
+        run: >
+          xcodebuild build -quiet
+          -project Example/KalendsExample.xcodeproj
+          -scheme KalendsExample
+          -destination 'platform=macOS'
+      - name: Build (iOS Simulator)
+        run: >
+          xcodebuild build -quiet
+          -project Example/KalendsExample.xcodeproj
+          -scheme KalendsExample
+          -destination 'generic/platform=iOS Simulator'
