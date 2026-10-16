@@ -40,6 +40,37 @@ extension Calendar {
         return (0 ..< 7).compactMap { self.date(byAdding: .day, value: $0, to: weekStart) }
     }
 
+    /// Visibility follows weekday columns, independently of day classification.
+    func visibleDaysOfWeek(containing date: Date, showWeekends: Bool) -> [Date] {
+        daysOfWeek(containing: date).filter { day in
+            let weekday = component(.weekday, from: day)
+            return showWeekends || (weekday != 1 && weekday != 7)
+        }
+    }
+
+    /// Horizontal dragging follows visible columns, including a gap where
+    /// Saturday/Sunday were hidden in a week that starts midweek.
+    func destinationDay(from date: Date, columnOffset: Int, visibleDays: [Date]) -> Date? {
+        guard let index = visibleDays.firstIndex(where: { isDate($0, inSameDayAs: date) }) else { return nil }
+        let targetIndex = min(max(index + columnOffset, 0), visibleDays.count - 1)
+        return visibleDays[targetIndex]
+    }
+
+    func visibleWeekdayIndices(showWeekends: Bool) -> [Int] {
+        (0 ..< 7).filter { index in
+            let weekday = (firstWeekday - 1 + index) % 7 + 1
+            return showWeekends || (weekday != 1 && weekday != 7)
+        }
+    }
+
+    /// Filter by column index so nil padding stays aligned with the headers.
+    func visibleWeeksInMonth(of date: Date, showWeekends: Bool) -> [[Date?]] {
+        let indices = visibleWeekdayIndices(showWeekends: showWeekends)
+        return weeksInMonth(of: date)
+            .map { week in indices.map { week[$0] } }
+            .filter { $0.contains { $0 != nil } }
+    }
+
     func daysInMonth(of date: Date) -> [Date] {
         let start = startOfMonth(for: date)
         guard let range = range(of: .day, in: .month, for: start) else { return [start] }

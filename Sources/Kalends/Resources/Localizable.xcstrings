@@ -56,6 +56,56 @@
         }
       }
     },
+    "Day off" : {
+      "localizations" : {
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Выходной день" } }
+      }
+    },
+    "Public holiday" : {
+      "localizations" : {
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Праздничный день" } }
+      }
+    },
+    "Transferred day off" : {
+      "localizations" : {
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Перенесённый выходной" } }
+      }
+    },
+    "Working day due to a transfer" : {
+      "localizations" : {
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Рабочий день по переносу" } }
+      }
+    },
+    "Shortened working day" : {
+      "localizations" : {
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Сокращённый рабочий день" } }
+      }
+    },
+    "Off" : {
+      "localizations" : {
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Вых" } }
+      }
+    },
+    "O" : {
+      "localizations" : {
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "В" } }
+      }
+    },
+    "H" : {
+      "localizations" : {
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "П" } }
+      }
+    },
+    "W" : {
+      "localizations" : {
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "Р" } }
+      }
+    },
+    "−1h" : {
+      "localizations" : {
+        "ru" : { "stringUnit" : { "state" : "translated", "value" : "−1ч" } }
+      }
+    },
     "All day" : {
       "localizations" : {
         "ru" : {

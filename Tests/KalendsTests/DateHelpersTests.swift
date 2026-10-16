@@ -37,6 +37,50 @@ final class DateHelpersTests: XCTestCase {
         XCTAssertEqual(months.last, testDay(2026, 12, 1))
     }
 
+    func testHiddenWeekendColumnsKeepMonthDatesAndHeadersAlignedForEveryFirstWeekday() {
+        for firstWeekday in 1 ... 7 {
+            var custom = calendar
+            custom.firstWeekday = firstWeekday
+            let indices = custom.visibleWeekdayIndices(showWeekends: false)
+            XCTAssertEqual(indices.count, 5)
+
+            for year in [2024, 2026] {
+                for month in 1 ... 12 {
+                    let date = testDay(year, month, 1)
+                    let weeks = custom.visibleWeeksInMonth(of: date, showWeekends: false)
+                    XCTAssertTrue(weeks.allSatisfy { $0.count == 5 && $0.contains { $0 != nil } })
+                    for week in weeks {
+                        for (column, day) in week.enumerated() {
+                            if let day {
+                                let expectedWeekday = (firstWeekday - 1 + indices[column]) % 7 + 1
+                                XCTAssertEqual(custom.component(.weekday, from: day), expectedWeekday)
+                            }
+                        }
+                    }
+                    let expected = custom.daysInMonth(of: date).filter {
+                        let weekday = custom.component(.weekday, from: $0)
+                        return weekday != 1 && weekday != 7
+                    }
+                    XCTAssertEqual(weeks.flatMap { $0 }.compactMap { $0 }, expected)
+                    XCTAssertEqual(custom.visibleWeeksInMonth(of: date, showWeekends: true), custom.weeksInMonth(of: date))
+                }
+            }
+        }
+    }
+
+    func testHorizontalDragFollowsVisibleColumnsAcrossHiddenWeekends() {
+        var thursdayFirst = calendar
+        thursdayFirst.firstWeekday = 5
+        let friday = testDay(2026, 9, 18)
+        let days = thursdayFirst.visibleDaysOfWeek(containing: friday, showWeekends: false)
+
+        XCTAssertEqual(thursdayFirst.destinationDay(from: friday, columnOffset: 1, visibleDays: days), testDay(2026, 9, 21))
+        XCTAssertEqual(thursdayFirst.destinationDay(from: testDay(2026, 9, 21), columnOffset: -1, visibleDays: days), friday)
+        XCTAssertEqual(thursdayFirst.destinationDay(from: friday, columnOffset: 100, visibleDays: days), days.last)
+        XCTAssertEqual(thursdayFirst.destinationDay(from: friday, columnOffset: -100, visibleDays: days), days.first)
+        XCTAssertNil(thursdayFirst.destinationDay(from: friday, columnOffset: 1, visibleDays: []))
+    }
+
     func testOrderedWeekdaySymbolsRespectMondayFirstRegion() {
         var monday = calendar
         monday.firstWeekday = 2

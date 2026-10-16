@@ -126,7 +126,8 @@ private struct CompactMiniMonth<Source: KalendsDataSource>: View {
                         )
                     } else {
                         Text("")
-                            .frame(width: 22, height: 26)
+                            .frame(height: 34)
+                            .frame(maxWidth: .infinity)
                     }
                 }
             }
@@ -144,6 +145,7 @@ private struct CompactMiniDayCell<Source: KalendsDataSource>: View {
 
     @Environment(\.locale) private var locale
     @Environment(\.calendar) private var calendar
+    @Environment(\.kalendsDays) private var dayConfiguration
     @State private var showingPopover = false
 
     private var isToday: Bool {
@@ -159,6 +161,7 @@ private struct CompactMiniDayCell<Source: KalendsDataSource>: View {
     }
 
     var body: some View {
+        let presentation = dayConfiguration.presentation(for: date, calendar: calendar, locale: locale)
         VStack(spacing: 0) {
             Text(DateText.dayNumber(date, locale: locale))
                 .font(.system(size: 11, weight: isToday ? .bold : .regular))
@@ -170,12 +173,17 @@ private struct CompactMiniDayCell<Source: KalendsDataSource>: View {
                 )
                 .padding(.top, 1)
 
-            Circle()
-                .fill(hasEvents ? eventIndicatorColor : Color.clear)
-                .frame(width: 3.5, height: 3.5)
-                .padding(.top, 2)
+            HStack(spacing: 1) {
+                DayMarker(date: date, compact: true)
+                Circle()
+                    .fill(hasEvents ? eventIndicatorColor : Color.clear)
+                    .frame(width: 3.5, height: 3.5)
+            }
+            .frame(height: 10)
         }
-        .frame(width: 22, height: 26, alignment: .top)
+        .frame(height: 34, alignment: .top)
+        .frame(maxWidth: .infinity)
+        .background(presentation.background, in: RoundedRectangle(cornerRadius: 3))
         .contentShape(Rectangle())
         .onTapGesture {
             selectedDate = date
@@ -192,6 +200,7 @@ private struct CompactMiniDayCell<Source: KalendsDataSource>: View {
             ? KalendsText.string("\(DateText.weekdayDayMonth(date, locale: locale)), has events", locale: locale)
             : DateText.weekdayDayMonth(date, locale: locale))
         .accessibilityAddTraits(.isButton)
+        .kalendsDayDetails(date)
     }
 
     private var dayForegroundColor: Color {
@@ -201,7 +210,9 @@ private struct CompactMiniDayCell<Source: KalendsDataSource>: View {
         if isSelectedDay {
             return .red
         }
-        return isCurrentMonth ? .primary : .gray.opacity(0.45)
+        return isCurrentMonth
+            ? dayConfiguration.presentation(for: date, calendar: calendar, locale: locale).foreground
+            : .gray.opacity(0.45)
     }
 
     private var eventIndicatorColor: Color {
@@ -288,7 +299,8 @@ private struct CardMiniMonth<Source: KalendsDataSource>: View {
                         )
                     } else {
                         Text("")
-                            .frame(width: 24, height: 24)
+                            .frame(height: 36)
+                            .frame(maxWidth: .infinity)
                     }
                 }
             }
@@ -311,24 +323,33 @@ private struct CardMiniDayCell<Popover: View>: View {
     @ViewBuilder let popover: () -> Popover
 
     @Environment(\.locale) private var locale
+    @Environment(\.calendar) private var calendar
+    @Environment(\.kalendsDays) private var dayConfiguration
     @State private var showingPopover = false
 
     var body: some View {
+        let presentation = dayConfiguration.presentation(for: date, calendar: calendar, locale: locale)
         VStack(spacing: 2) {
             Text(DateText.dayNumber(date, locale: locale))
                 .font(.system(size: 11))
                 .fontWeight(isToday ? .bold : .regular)
-                .foregroundColor(isToday ? .white : (isCurrentMonth ? .primary : .gray))
+                .foregroundColor(isToday ? .white : (isCurrentMonth ? presentation.foreground : .gray))
                 .frame(width: 24, height: 24)
                 .background(
                     Circle()
                         .fill(isToday ? Color.red : Color.clear)
                 )
 
-            Circle()
-                .fill(hasEvents ? Color.blue : Color.clear)
-                .frame(width: 4, height: 4)
+            HStack(spacing: 2) {
+                DayMarker(date: date, compact: true)
+                Circle()
+                    .fill(hasEvents ? Color.blue : Color.clear)
+                    .frame(width: 4, height: 4)
+            }
+            .frame(height: 10)
         }
+        .frame(maxWidth: .infinity)
+        .background(presentation.background, in: RoundedRectangle(cornerRadius: 3))
         .contentShape(Rectangle())
         .onTapGesture(count: 2) {
             showingPopover = false
@@ -346,5 +367,6 @@ private struct CardMiniDayCell<Popover: View>: View {
             ? KalendsText.string("\(DateText.weekdayDayMonth(date, locale: locale)), has events", locale: locale)
             : DateText.weekdayDayMonth(date, locale: locale))
         .accessibilityAddTraits(.isButton)
+        .kalendsDayDetails(date)
     }
 }

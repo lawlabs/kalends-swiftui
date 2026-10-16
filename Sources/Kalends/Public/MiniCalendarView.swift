@@ -72,7 +72,8 @@ public struct MiniCalendarView: View {
                         )
                     } else {
                         Text("")
-                            .frame(width: 20, height: 20)
+                            .frame(height: 29)
+                            .frame(maxWidth: .infinity)
                     }
                 }
             }
@@ -95,20 +96,30 @@ private struct MiniCalendarDayCell: View {
     let onSelect: () -> Void
 
     @Environment(\.locale) private var locale
+    @Environment(\.calendar) private var calendar
+    @Environment(\.kalendsDays) private var dayConfiguration
 
     var body: some View {
+        let presentation = dayConfiguration.presentation(for: date, calendar: calendar, locale: locale)
         Button(action: onSelect) {
-            Text(DateText.dayNumber(date, locale: locale))
-                .font(.system(size: 10))
-                .foregroundColor(isToday ? .white : (isCurrentMonth ? .primary : .gray))
-                .frame(width: 20, height: 20)
-                .background(
-                    Circle()
-                        .fill(isToday ? Color.red : (isSelected ? Color.blue.opacity(0.3) : Color.clear))
-                )
+            VStack(spacing: 0) {
+                Text(DateText.dayNumber(date, locale: locale))
+                    .font(.system(size: 10))
+                    .foregroundColor(isToday ? .white : (isCurrentMonth ? presentation.foreground : .gray))
+                    .frame(width: 20, height: 20)
+                    .background(
+                        Circle()
+                            .fill(isToday ? Color.red : (isSelected ? Color.blue.opacity(0.3) : Color.clear))
+                    )
+                DayMarker(date: date, compact: true)
+                    .frame(height: 9)
+            }
+            .frame(maxWidth: .infinity)
+            .background(presentation.background, in: RoundedRectangle(cornerRadius: 3))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(DateText.weekdayDayMonth(date, locale: locale))
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .kalendsDayDetails(date)
     }
 }

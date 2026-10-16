@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Seven day columns on one 24-hour grid, with a pinned header of weekday
+/// Day columns on one 24-hour grid, with a pinned header of weekday
 /// names and an all-day row when the week has all-day events.
 ///
 /// Events can be dragged in time and across days, and resized. The week is
@@ -13,6 +13,7 @@ public struct WeekView<Source: KalendsDataSource>: View {
     private let actions: KalendsActions<Source.Event>
 
     @Environment(\.calendar) private var calendar
+    @Environment(\.kalendsDays) private var dayConfiguration
 
     private let hours = Array(0 ... 23)
 
@@ -31,7 +32,7 @@ public struct WeekView<Source: KalendsDataSource>: View {
     }
 
     private var daysOfWeek: [Date] {
-        calendar.daysOfWeek(containing: selectedDate)
+        calendar.visibleDaysOfWeek(containing: selectedDate, showWeekends: dayConfiguration.showWeekends)
     }
 
     private var hasAllDayEvents: Bool {
@@ -117,6 +118,7 @@ private struct WeekHeader: View {
 
     @Environment(\.locale) private var locale
     @Environment(\.calendar) private var calendar
+    @Environment(\.kalendsDays) private var dayConfiguration
 
     var body: some View {
         HStack(spacing: 0) {
@@ -126,24 +128,32 @@ private struct WeekHeader: View {
 
             ForEach(daysOfWeek, id: \.self) { day in
                 let isToday = calendar.isDateInToday(day)
+                let presentation = dayConfiguration.presentation(for: day, calendar: calendar, locale: locale)
                 VStack(spacing: 4) {
                     Text(DateText.weekdayAbbreviated(day, locale: locale))
                         .font(.caption)
-                        .foregroundColor(.gray)
+                        .foregroundColor(presentation.foreground)
 
                     Text(DateText.dayNumber(day, locale: locale))
                         .font(.headline)
-                        .foregroundColor(isToday ? .red : .primary)
+                        .foregroundColor(isToday ? .red : presentation.foreground)
                         .padding(4)
                         .background(
                             Circle()
                                 .fill(isToday ? Color.red.opacity(0.1) : Color.clear)
                         )
+
+                    DayMarker(date: day)
+                        .frame(height: 12)
                 }
                 .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(presentation.background)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(DateText.weekdayDayMonth(day, locale: locale))
+                .kalendsDayDetails(day)
             }
         }
-        .padding(.vertical, 8)
     }
 }
 
@@ -187,10 +197,11 @@ private struct WeekAllDayRow<Source: KalendsDataSource>: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
+                .padding(.vertical, 4)
+                .background(DayBackground(date: day))
                 .clipped()
             }
         }
-        .padding(.vertical, 4)
     }
 }
 
@@ -248,7 +259,15 @@ private struct WeekGrid<Source: KalendsDataSource>: View {
         ZStack(alignment: .topLeading) {
             HStack(spacing: 0) {
                 HourLabelsColumn(hours: hours, hourHeight: hourHeight, trailingPadding: 4)
-                TimeGridLines(hourHeight: hourHeight, hourCount: hours.count, columnCount: 7)
+                TimeGridLines(hourHeight: hourHeight, hourCount: hours.count, columnCount: daysOfWeek.count)
+                    .background {
+                        HStack(spacing: 0) {
+                            ForEach(daysOfWeek, id: \.self) { day in
+                                DayBackground(date: day)
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                    }
             }
 
             HStack(spacing: 0) {
@@ -262,7 +281,8 @@ private struct WeekGrid<Source: KalendsDataSource>: View {
                         hourHeight: hourHeight,
                         totalHeight: totalHeight,
                         selectedEventID: selectedEventID,
-                        actions: actions
+                        actions: actions,
+                        visibleDays: daysOfWeek
                     )
                 }
             }
@@ -285,6 +305,7 @@ private struct WeekDayColumn<Source: KalendsDataSource>: View {
     let totalHeight: CGFloat
     let selectedEventID: Source.Event.ID?
     let actions: KalendsActions<Source.Event>
+    let visibleDays: [Date]
 
     var body: some View {
         GeometryReader { geometry in
@@ -308,7 +329,8 @@ private struct WeekDayColumn<Source: KalendsDataSource>: View {
                     dayWidth: dayWidth,
                     style: .week,
                     selectedEventID: selectedEventID,
-                    actions: actions
+                    actions: actions,
+                    visibleDays: visibleDays
                 )
             }
         }

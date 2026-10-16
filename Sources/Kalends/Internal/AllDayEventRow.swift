@@ -40,7 +40,7 @@ struct AllDayEventRow<Event: KalendsEvent>: View {
             RoundedRectangle(cornerRadius: 6)
                 .stroke(event.color.opacity(isSelected ? 0.6 : 0), lineWidth: 1)
         )
-        .padding(.horizontal)
+        .padding(.horizontal, 4)
     }
 }
 
@@ -50,20 +50,21 @@ struct AllDaySection<Source: KalendsDataSource>: View {
     let day: Date
     let selectedEventID: Source.Event.ID?
     let actions: KalendsActions<Source.Event>
+    let timeColumnWidth: CGFloat
 
     @Environment(\.locale) private var locale
 
     var body: some View {
         let allDayEvents = source.events(on: day).filter(\.isAllDay)
         if !allDayEvents.isEmpty {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(KalendsText.string("All day", locale: locale))
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                }
-                .padding(.horizontal)
+            HStack(alignment: .top, spacing: 0) {
+                Text(KalendsText.string("All day", locale: locale))
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.trailing)
+                    .padding(.trailing, 8)
+                    .frame(width: timeColumnWidth, alignment: .trailing)
+                    .padding(.top, 8)
 
                 // Sized to its rows; only a long list scrolls within 100 pt.
                 ViewThatFits(in: .vertical) {
@@ -72,9 +73,11 @@ struct AllDaySection<Source: KalendsDataSource>: View {
                         rows(allDayEvents)
                     }
                 }
+                .frame(maxWidth: .infinity)
                 .frame(maxHeight: 100)
+                .padding(.vertical, 8)
+                .background(DayBackground(date: day))
             }
-            .padding(.vertical, 8)
             .background(
                 Rectangle()
                     .fill(Color.clear)

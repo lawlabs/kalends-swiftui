@@ -15,6 +15,7 @@ public struct DayView<Source: KalendsDataSource>: View {
 
     @Environment(\.locale) private var locale
     @Environment(\.calendar) private var calendar
+    @Environment(\.kalendsDays) private var dayConfiguration
 
     private let hours = Array(0 ... 23)
     private let timeColumnWidth: CGFloat = 58
@@ -75,7 +76,8 @@ public struct DayView<Source: KalendsDataSource>: View {
                     source: source,
                     day: selectedDate,
                     selectedEventID: selectedEventID,
-                    actions: actions
+                    actions: actions,
+                    timeColumnWidth: timeColumnWidth
                 )
 
                 ScrollViewReader { proxy in
@@ -85,6 +87,7 @@ public struct DayView<Source: KalendsDataSource>: View {
                             HStack(spacing: 0) {
                                 HourLabelsColumn(hours: hours, hourHeight: hourHeight, trailingPadding: 8)
                                 TimeGridLines(hourHeight: hourHeight, hourCount: hours.count, columnCount: 1)
+                                    .background(DayBackground(date: selectedDate))
                             }
 
                             TimeGridCreationOverlay(
@@ -141,25 +144,33 @@ public struct DayView<Source: KalendsDataSource>: View {
     }
 
     private var dateHeader: some View {
-        VStack(alignment: .leading, spacing: 2) {
+        let presentation = dayConfiguration.presentation(for: selectedDate, calendar: calendar, locale: locale)
+        return VStack(alignment: .leading, spacing: 2) {
             Text(DateText.dayMonthYear(selectedDate, locale: locale))
                 .font(.title)
                 .fontWeight(.bold)
 
-            Text(DateText.weekdayName(selectedDate, locale: locale))
-                .font(.title3)
-                .foregroundColor(.secondary)
+            HStack {
+                Text(DateText.weekdayName(selectedDate, locale: locale))
+                    .font(.title3)
+                    .foregroundColor(presentation.foreground)
+                DayMarker(date: selectedDate)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal)
         .padding(.top, resolvedStyle == .compact ? 10 : 12)
         .padding(.bottom, 12)
+        .background(presentation.background)
+        .accessibilityElement(children: .combine)
+        .kalendsDayDetails(selectedDate)
     }
 
     private var weekStrip: some View {
         HStack(spacing: 0) {
-            ForEach(calendar.daysOfWeek(containing: selectedDate), id: \.self) { date in
+            ForEach(calendar.visibleDaysOfWeek(containing: selectedDate, showWeekends: dayConfiguration.showWeekends), id: \.self) { date in
                 let isSelected = calendar.isDate(date, inSameDayAs: selectedDate)
+                let presentation = dayConfiguration.presentation(for: date, calendar: calendar, locale: locale)
 
                 Button {
                     selectedDate = date
@@ -168,22 +179,29 @@ public struct DayView<Source: KalendsDataSource>: View {
                         Text(DateText.weekdayNarrow(date, locale: locale))
                             .font(.caption)
                             .fontWeight(.medium)
-                            .foregroundColor(isSelected ? .red : .secondary)
+                            .foregroundColor(isSelected ? .red : presentation.foreground)
 
                         Text(DateText.dayNumber(date, locale: locale))
                             .font(.headline)
                             .fontWeight(.semibold)
-                            .foregroundColor(isSelected ? .white : .primary)
+                            .foregroundColor(isSelected ? .white : presentation.foreground)
                             .frame(width: 30, height: 30)
                             .background(
                                 Circle()
                                     .fill(isSelected ? Color.red : Color.clear)
                             )
+
+                        DayMarker(date: date, compact: true)
+                            .frame(height: 9)
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 6)
+                    .background(presentation.background)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(DateText.weekdayDayMonth(date, locale: locale))
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+                .kalendsDayDetails(date)
             }
         }
         .padding(.horizontal, 8)

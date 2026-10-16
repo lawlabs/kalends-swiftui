@@ -6,6 +6,17 @@ and the project adheres to [Semantic Versioning](https://semver.org).
 
 ## [Unreleased]
 
+### Added
+
+- Host-supplied `KalendsDayInfo` for holidays, weekends, transferred days off and working days; shortened status can accompany a working transfer.
+- `.kalendsDays(_:)` shares classification, independent highlight/marker switches and Saturday/Sunday visibility across calendar views.
+- Localized date markers, tooltips and accessibility descriptions in day, week, month, year and sidebar calendars. Compact calendars use `*` for shortened days.
+
+### Fixed
+
+- Day and Week all-day backgrounds align with their hourly columns.
+- Hidden weekend columns preserve month/header alignment and horizontal event dragging follows the visible week dates.
+
 ## [0.1.0] - 2026-09-20
 
 ### Added

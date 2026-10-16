@@ -66,6 +66,7 @@ struct DraggableEventView<Event: KalendsEvent>: View {
     let isSelected: Bool
     let onReschedule: (DateInterval) -> Void
     let onTap: () -> Void
+    var visibleDays: [Date]? = nil
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.locale) private var locale
@@ -282,12 +283,22 @@ struct DraggableEventView<Event: KalendsEvent>: View {
 
     private func snappedDayOffset(_ points: CGFloat) -> CGFloat {
         guard let dayWidth, dayWidth > 0 else { return 0 }
-        return (points / dayWidth).rounded() * dayWidth
+        let offset = Int((points / dayWidth).rounded())
+        if let visibleDays,
+           let index = visibleDays.firstIndex(where: { calendar.isDate($0, inSameDayAs: displayDate) }) {
+            return CGFloat(min(max(offset, -index), visibleDays.count - index - 1)) * dayWidth
+        }
+        return CGFloat(offset) * dayWidth
     }
 
     private var daysDelta: Int {
         guard let dayWidth, dayWidth > 0 else { return 0 }
-        return Int((dragOffsetX / dayWidth).rounded())
+        let columnOffset = Int((dragOffsetX / dayWidth).rounded())
+        if let visibleDays,
+           let destination = calendar.destinationDay(from: displayDate, columnOffset: columnOffset, visibleDays: visibleDays) {
+            return calendar.dateComponents([.day], from: calendar.startOfDay(for: displayDate), to: destination).day ?? 0
+        }
+        return columnOffset
     }
 
     /// The event's time range with the current offsets applied — what will be
@@ -397,6 +408,7 @@ struct DayColumnEvents<Source: KalendsDataSource>: View {
     let style: EventBlockStyle
     let selectedEventID: Source.Event.ID?
     let actions: KalendsActions<Source.Event>
+    var visibleDays: [Date]? = nil
 
     @Environment(\.calendar) private var calendar
 
@@ -427,7 +439,8 @@ struct DayColumnEvents<Source: KalendsDataSource>: View {
                 },
                 onTap: {
                     actions.selectEvent(layout.event)
-                }
+                },
+                visibleDays: visibleDays
             )
         }
     }

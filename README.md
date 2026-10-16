@@ -129,6 +129,46 @@ Events with `isReadOnly == true` are drawn but cannot be moved or resized.
 - **Locale and calendar** — set `.environment(\.locale, …)` and `.environment(\.calendar, …)` on any ancestor; weekday order follows `calendar.firstWeekday`.
 - **Layout** — call `EventLayoutCalculator.layout(for:on:containerWidth:hourHeight:configuration:)` yourself to draw events in your own grid.
 
+## Day classification and weekends
+
+Supply production-calendar information from the host's in-memory data. The same
+configuration applies to `KalendsView`, individual day/week/month/year views and
+`MiniCalendarView` through the SwiftUI environment:
+
+```swift
+let calendar = Calendar.current
+let date = calendar.date(from: DateComponents(year: 2026, month: 12, day: 31))!
+// Illustrative host data, not a country-specific holiday rule.
+let days = [date: KalendsDayInfo(kind: .transferredDayOff, description: "Day off moved from another date")]
+
+KalendsView(mode: mode, source: store, selectedDate: $selectedDate)
+    .kalendsDays(KalendsDayConfiguration(
+        showWeekends: true,
+        highlightWeekends: true,
+        highlightHolidays: true,
+        showWorkingDayMarkers: true,
+        dayInfoProvider: { day in days[day] }
+    ))
+```
+
+The provider runs on the main actor and receives the start of day in the view's
+`\.calendar`. Return `nil` to fall back to Saturday/Sunday; return `.working`
+or `.transferredWorking` to override a weekend date. The lookup must be fast and
+synchronous; keep storage and networking in the host. Observable data read by the
+provider participates in SwiftUI updates; results are not cached across updates.
+
+`isShortened` can accompany either working kind. A working transfer never receives
+non-working shading. Localized markers complement color, and date tooltips and
+accessibility values explain each status even when highlights are off. A custom
+`description` replaces the generated explanation. English and Russian are included.
+
+All switches default to `true`. `highlightWeekends`, `highlightHolidays` and
+`showWorkingDayMarkers` only change presentation. `showWeekends` hides the
+Saturday/Sunday columns in week/month and the compact day strip, independently of
+the resolved statuses. Year and sidebar calendars retain all seven days for
+navigation. Hidden dates' events remain in the source. No production-calendar
+dataset is bundled.
+
 ## Example App
 
 `Example/KalendsExample.xcodeproj` runs on iPhone, iPad and Mac with the same week of sample events as the Kalends.WinUI sample: switch modes, drag events around, draw new ones. It builds from a clean clone; to run on a device, pick your team under Signing & Capabilities. The project is generated from `Example/project.yml` with [XcodeGen](https://github.com/yonaskolb/XcodeGen).

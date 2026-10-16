@@ -66,12 +66,15 @@ struct WeekdayHeaderRow: View {
 
     @Environment(\.locale) private var locale
     @Environment(\.calendar) private var calendar
+    @Environment(\.kalendsDays) private var dayConfiguration
 
     var body: some View {
-        let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: 7)
+        let indices = calendar.visibleWeekdayIndices(showWeekends: dayConfiguration.showWeekends)
+        let symbols = calendar.orderedWeekdaySymbols(style, locale: locale)
+        let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: indices.count)
         LazyVGrid(columns: columns, spacing: 0) {
-            ForEach(Array(calendar.orderedWeekdaySymbols(style, locale: locale).enumerated()), id: \.offset) { _, day in
-                Text(day)
+            ForEach(indices, id: \.self) { index in
+                Text(symbols[index])
                     .font(font)
                     .fontWeight(.medium)
                     .foregroundColor(color)
@@ -96,8 +99,11 @@ private struct CompactMonthView<Source: KalendsDataSource>: View {
     let actions: KalendsActions<Source.Event>
 
     @Environment(\.calendar) private var calendar
+    @Environment(\.kalendsDays) private var dayConfiguration
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: 7)
+    private var columns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 0), count: dayConfiguration.showWeekends ? 7 : 5)
+    }
 
     /// Months around an anchor fixed on first appearance; the range only
     /// grows at the edges so the content above the scroll position never
@@ -184,6 +190,7 @@ private struct CompactMonthSection<Source: KalendsDataSource>: View {
 
     @Environment(\.locale) private var locale
     @Environment(\.calendar) private var calendar
+    @Environment(\.kalendsDays) private var dayConfiguration
 
     private var monthTitle: String {
         if calendar.isDate(month, equalTo: selectedDate, toGranularity: .year) {
@@ -206,7 +213,7 @@ private struct CompactMonthSection<Source: KalendsDataSource>: View {
             .padding(.horizontal, 4)
 
             LazyVGrid(columns: columns, spacing: 0) {
-                ForEach(Array(calendar.weeksInMonth(of: month).enumerated()), id: \.offset) { _, week in
+                ForEach(Array(calendar.visibleWeeksInMonth(of: month, showWeekends: dayConfiguration.showWeekends).enumerated()), id: \.offset) { _, week in
                     ForEach(Array(week.enumerated()), id: \.offset) { _, date in
                         if let date {
                             CompactMonthDayCell(
@@ -242,6 +249,8 @@ private struct CompactMonthDayCell<Event: KalendsEvent>: View {
     let onDayTap: () -> Void
 
     @Environment(\.locale) private var locale
+    @Environment(\.calendar) private var calendar
+    @Environment(\.kalendsDays) private var dayConfiguration
 
     private static var maxVisibleIndicators: Int { 3 }
 
@@ -255,13 +264,14 @@ private struct CompactMonthDayCell<Event: KalendsEvent>: View {
     }
 
     var body: some View {
+        let presentation = dayConfiguration.presentation(for: date, calendar: calendar, locale: locale)
         VStack(alignment: .leading, spacing: 0) {
-            HStack {
+            HStack(spacing: 2) {
                 Text(DateText.dayNumber(date, locale: locale))
                     .font(.system(size: 16, weight: isToday ? .bold : .regular))
                     .foregroundColor(
                         isToday ? .white :
-                            isCurrentMonth ? .primary : .gray.opacity(0.45)
+                            isCurrentMonth ? presentation.foreground : .gray.opacity(0.45)
                     )
                     .frame(width: 32, height: 32)
                     .background(
@@ -271,8 +281,12 @@ private struct CompactMonthDayCell<Event: KalendsEvent>: View {
                     .padding(.top, 5)
                     .padding(.leading, 5)
 
-                Spacer()
+                Spacer(minLength: 0)
             }
+
+            DayMarker(date: date, compact: true)
+                .frame(width: 32, height: 9)
+                .padding(.leading, 5)
 
             Spacer(minLength: 8)
 
@@ -297,6 +311,7 @@ private struct CompactMonthDayCell<Event: KalendsEvent>: View {
             .padding(.horizontal, 7)
             .padding(.bottom, 9)
         }
+        .background(presentation.background)
         .contentShape(Rectangle())
         .onTapGesture {
             onDayTap()
@@ -311,6 +326,10 @@ private struct CompactMonthDayCell<Event: KalendsEvent>: View {
                 .fill(Color.gray.opacity(0.05))
                 .frame(width: 0.5)
         }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(KalendsText.string("\(DateText.weekdayDayMonth(date, locale: locale)), \(events.count) events", locale: locale))
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .kalendsDayDetails(date)
     }
 
     private var dayBadgeBackground: Color {
@@ -333,8 +352,11 @@ private struct DetailedMonthView<Source: KalendsDataSource>: View {
     let actions: KalendsActions<Source.Event>
 
     @Environment(\.calendar) private var calendar
+    @Environment(\.kalendsDays) private var dayConfiguration
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 0), count: 7)
+    private var columns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 0), count: dayConfiguration.showWeekends ? 7 : 5)
+    }
 
     /// Months around an anchor. The anchor is fixed on first appearance and
     /// the range only grows at the edges when the user travels far; rebuilding
@@ -424,6 +446,7 @@ private struct DetailedMonthSection<Source: KalendsDataSource>: View {
 
     @Environment(\.locale) private var locale
     @Environment(\.calendar) private var calendar
+    @Environment(\.kalendsDays) private var dayConfiguration
 
     var body: some View {
         VStack(spacing: 0) {
@@ -439,7 +462,7 @@ private struct DetailedMonthSection<Source: KalendsDataSource>: View {
             .padding(.horizontal, 4)
 
             LazyVGrid(columns: columns, spacing: 0) {
-                ForEach(Array(calendar.weeksInMonth(of: month).enumerated()), id: \.offset) { _, week in
+                ForEach(Array(calendar.visibleWeeksInMonth(of: month, showWeekends: dayConfiguration.showWeekends).enumerated()), id: \.offset) { _, week in
                     ForEach(Array(week.enumerated()), id: \.offset) { _, date in
                         if let date {
                             dayCell(for: date)
@@ -492,18 +515,21 @@ private struct DetailedMonthDayCell<Event: KalendsEvent>: View {
     let onDayDoubleTap: () -> Void
 
     @Environment(\.locale) private var locale
+    @Environment(\.calendar) private var calendar
+    @Environment(\.kalendsDays) private var dayConfiguration
     @State private var isOverflowPresented = false
 
     private static var maxVisibleEvents: Int { 4 }
 
     var body: some View {
+        let presentation = dayConfiguration.presentation(for: date, calendar: calendar, locale: locale)
         VStack(alignment: .leading, spacing: 2) {
-            HStack {
+            HStack(spacing: 3) {
                 Text(DateText.dayNumber(date, locale: locale))
                     .font(.system(size: 14, weight: isToday ? .bold : .regular))
                     .foregroundColor(
                         isToday ? .white :
-                            isCurrentMonth ? .primary : .gray.opacity(0.5)
+                            isCurrentMonth ? presentation.foreground : .gray.opacity(0.5)
                     )
                     .frame(width: 24, height: 24)
                     .background(
@@ -513,7 +539,8 @@ private struct DetailedMonthDayCell<Event: KalendsEvent>: View {
                     .padding(.top, 4)
                     .padding(.leading, 4)
 
-                Spacer()
+                DayMarker(date: date)
+                Spacer(minLength: 0)
             }
 
             if !events.isEmpty {
@@ -561,6 +588,7 @@ private struct DetailedMonthDayCell<Event: KalendsEvent>: View {
                         Color.clear
                 )
         )
+        .background(presentation.background)
         .contentShape(Rectangle())
         .onTapGesture(count: 2) {
             onDayDoubleTap()
@@ -574,6 +602,7 @@ private struct DetailedMonthDayCell<Event: KalendsEvent>: View {
         )
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityLabel)
+        .kalendsDayDetails(date)
     }
 
     private var accessibilityLabel: String {
