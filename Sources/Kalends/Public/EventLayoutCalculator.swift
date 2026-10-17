@@ -42,6 +42,11 @@ public struct EventLayout<Event: KalendsEvent>: Identifiable, Hashable {
     public let overlapStackCount: Int
     /// Draw order; later starts and deeper cascade levels go on top.
     public let zIndexPriority: Double
+    /// Height in points of the block's top part that no later block covers,
+    /// or `nil` when nothing covers it. Lay the block's text out within this
+    /// part, as Apple Calendar does, so a covering block never cuts a line
+    /// in half: a short visible part shows the title without the time.
+    public let visibleHeight: CGFloat?
 
     public var id: Event.ID { event.id }
 }
@@ -84,7 +89,8 @@ public enum EventLayoutCalculator {
                     widthFraction: 1,
                     overlapDepth: 0,
                     overlapStackCount: 1,
-                    zIndexPriority: zIndexPriority(for: $0, startOfDay: startOfDay)
+                    zIndexPriority: zIndexPriority(for: $0, startOfDay: startOfDay),
+                    visibleHeight: nil
                 )
             }
         }
@@ -122,14 +128,24 @@ public enum EventLayoutCalculator {
             rowStart = rowEnd
         }
 
-        return placements.map { placement in
-            EventLayout(
+        return placements.enumerated().map { index, placement in
+            // Placements run row by row, so a block can only be covered by
+            // one placed after it, from a lower row.
+            let coveringTops = placements[(index + 1)...]
+                .filter {
+                    $0.block.top > placement.block.top &&
+                        $0.block.top < placement.block.bottom &&
+                        $0.overlapsHorizontally(placement)
+                }
+                .map(\.block.top)
+            return EventLayout(
                 event: placement.block.event,
                 xFraction: placement.x / containerWidth,
                 widthFraction: placement.width / containerWidth,
                 overlapDepth: placement.depth,
                 overlapStackCount: placement.rowCount,
-                zIndexPriority: placement.block.zIndexPriority + Double(placement.depth) * 0.001
+                zIndexPriority: placement.block.zIndexPriority + Double(placement.depth) * 0.001,
+                visibleHeight: coveringTops.min().map { $0 - placement.block.top }
             )
         }
     }

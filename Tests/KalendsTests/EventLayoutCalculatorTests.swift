@@ -54,6 +54,33 @@ final class EventLayoutCalculatorTests: XCTestCase {
         assertReadable(layout, day: day)
     }
 
+    func testVisibleHeightEndsWhereALaterBlockCoversTheEvent() {
+        let day = testDay()
+        let long = testEvent("Long", day: day, from: (9, 0), to: (12, 0))
+        let inner = testEvent("Inner", day: day, from: (9, 30), to: (10, 0))
+        let later = testEvent("Later", day: day, from: (11, 0), to: (11, 30))
+        let separate = testEvent("Separate", day: day, from: (13, 0), to: (14, 0))
+
+        let layout = layout(for: [long, inner, later, separate], day: day)
+
+        // The first covering block counts; 30 minutes are 30 points here.
+        XCTAssertEqual(layout[long.id]?.visibleHeight ?? 0, 30, accuracy: 0.001)
+        XCTAssertNil(layout[inner.id]?.visibleHeight)
+        XCTAssertNil(layout[later.id]?.visibleHeight)
+        XCTAssertNil(layout[separate.id]?.visibleHeight)
+    }
+
+    func testSideBySideNeighboursDoNotShortenTheVisibleHeight() {
+        let day = testDay()
+        let left = testEvent("Left", day: day, from: (10, 0), to: (12, 0))
+        let right = testEvent("Right", day: day, from: (10, 10), to: (12, 0))
+
+        let layout = layout(for: [left, right], day: day)
+
+        XCTAssertNil(layout[left.id]?.visibleHeight)
+        XCTAssertNil(layout[right.id]?.visibleHeight)
+    }
+
     func testCascadeStartsOneTitleBandBelowTheEarlierEvent() {
         let day = testDay()
         let first = testEvent("First", day: day, from: (9, 0), to: (10, 0))
@@ -248,6 +275,17 @@ final class EventLayoutCalculatorTests: XCTestCase {
         }
 
         XCTAssertEqual(layout["1915"]?.xFraction ?? 0, indent, accuracy: 0.001)
+
+        // Apple Calendar shows only the title where a later event covers the
+        // block half an hour in; uncovered blocks keep their full height.
+        for id in ["0815", "1100", "1130a", "1130b", "1300", "1330", "1830"] {
+            XCTAssertNotNil(layout[id]?.visibleHeight, id)
+        }
+        XCTAssertEqual(layout["1100"]?.visibleHeight ?? 0, 30, accuracy: 0.001)
+        XCTAssertEqual(layout["0815"]?.visibleHeight ?? 0, 45, accuracy: 0.001)
+        for id in ["1000a", "1000b", "1200a", "1200b", "1200c", "1400a", "1500a", "1515", "1915"] {
+            XCTAssertNil(layout[id]?.visibleHeight, id)
+        }
     }
 
     func testRandomDaysStayReadable() {

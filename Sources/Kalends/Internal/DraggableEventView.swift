@@ -70,6 +70,9 @@ struct DraggableEventView<Event: KalendsEvent>: View {
     /// Cascade level from ``EventLayout/overlapDepth``; above 0 the block is
     /// drawn over another one.
     var overlapDepth: Int = 0
+    /// From ``EventLayout/visibleHeight``: how much of the block's top no
+    /// later block covers. The text is laid out within it.
+    var visibleHeight: CGFloat? = nil
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.locale) private var locale
@@ -130,6 +133,14 @@ struct DraggableEventView<Event: KalendsEvent>: View {
         interactionMode != .none
     }
 
+    /// Height for the text when a later block covers the lower part, so the
+    /// title and time are fitted above it instead of being cut by it. While
+    /// the block is being moved it is drawn on top and uses its full height.
+    private var textAreaHeight: CGFloat? {
+        guard !isInteracting, let visibleHeight, visibleHeight < eventHeight else { return nil }
+        return visibleHeight
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -170,7 +181,7 @@ struct DraggableEventView<Event: KalendsEvent>: View {
     }
 
     private var eventBody: some View {
-        HStack(spacing: 0) {
+        HStack(alignment: .top, spacing: 0) {
             RoundedRectangle(cornerRadius: metrics.accentBarWidth / 2)
                 .fill(color)
                 .frame(width: metrics.accentBarWidth)
@@ -192,6 +203,7 @@ struct DraggableEventView<Event: KalendsEvent>: View {
             }
             .padding(.horizontal, metrics.horizontalPadding)
             .padding(.vertical, metrics.verticalPadding)
+            .frame(height: textAreaHeight, alignment: .top)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
@@ -479,7 +491,8 @@ struct DayColumnEvents<Source: KalendsDataSource>: View {
                     actions.selectEvent(layout.event)
                 },
                 visibleDays: visibleDays,
-                overlapDepth: layout.overlapDepth
+                overlapDepth: layout.overlapDepth,
+                visibleHeight: layout.visibleHeight
             )
         }
     }

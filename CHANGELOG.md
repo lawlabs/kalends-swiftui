@@ -16,12 +16,13 @@ and the project adheres to [Semantic Versioning](https://semver.org).
 
 - `EventLayoutCalculator` lays out overlapping events like Apple Calendar. Events whose title bands overlap sit side by side and no longer overlap each other; a later event covers an earlier one only below its title and `staggerOffset` right of its left edge; each event takes the widest free space. `overlapDepth` is now the cascade level. `EventLayoutConfiguration` drops `horizontalSpacing` and now uses `minEventWidth` (16), `minEventHeight` (20) and `staggerOffset` (10).
 - Event blocks are opaque, so a block drawn over another hides its text. A cascaded block has a thin rim, back-to-back events keep a 1-point gap.
-- An event title wraps into all the height its block has; the time line is shown only when it fits under one title line, and in a narrow block drops the clock, then the end time, then itself.
+- An event title wraps into the part of its block that no later block covers (`EventLayout.visibleHeight`); the time line is shown only when it fits there under one title line, so a covering block never cuts it in half, and in a narrow block it drops the clock, then the end time, then itself.
 - Times on a 24-hour clock have two-digit hours (“08:15”), matching the hour labels.
 
 ### Fixed
 
 - The day view's all-day section is as tall as its rows instead of always 100 points.
+- An English `\.locale` gets English text when the process prefers another language. English is the source language and has no `.lproj`, so the lookup used to fall back to the process language.
 - Day and Week all-day backgrounds align with their hourly columns.
 - Hidden weekend columns preserve month/header alignment and horizontal event dragging follows the visible week dates.
 
