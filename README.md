@@ -24,7 +24,7 @@ Kalends is the calendar engine behind [LawMatic Calendar](https://github.com/law
 - **Day, week, month, year** — plus `KalendsView`, one view that switches between them, and `MiniCalendarView` for a sidebar.
 - **Drag and drop** — move events in time and, in the week view, across days; resize from either edge; 15-minute snap with a live time badge.
 - **Create by gesture** — double-tap empty space for a new event, drag on empty space to draw one.
-- **Overlap layout** — events whose titles would collide sit side by side; an event starting inside a longer one is cascaded so both titles stay readable. The algorithm is a public, testable `EventLayoutCalculator`.
+- **Overlap layout** — as in Apple Calendar: events whose titles would collide sit side by side without overlapping; an event starting inside a longer one is drawn over its body, below its title and right of its left edge, so every title stays readable. The algorithm is a public, testable `EventLayoutCalculator`.
 - **Touch and desktop styles** — compact month and year views for iPhone and iPad, detailed (event titles, “+N more”) and card styles for the Mac, picked automatically.
 - **Host-owned data** — your model conforms to `KalendsEvent`; Kalends never stores or edits anything. No providers, sync or persistence types.
 - **Locale-aware** — weekday order from the calendar's first weekday, dates and text from the SwiftUI `\.locale` (English and Russian strings included), light and dark mode.

@@ -23,6 +23,16 @@ extension Color {
         #endif
     }
 
+    /// Opaque backdrop under an event block's tint, so a block drawn over
+    /// another hides it instead of letting its text show through.
+    static var kalendsEventBackdrop: Color {
+        #if os(macOS)
+        Color(NSColor.textBackgroundColor)
+        #else
+        Color(uiColor: .systemBackground)
+        #endif
+    }
+
     static var kalendsSeparator: Color {
         #if os(macOS)
         Color(NSColor.separatorColor)
@@ -33,9 +43,9 @@ extension Color {
 
     /// Text color over a fill of this color.
     ///
-    /// An unselected block is filled with a translucent tint (≈25 %), so in
-    /// dark mode the backdrop is dark and the text must be light, and vice
-    /// versa. A selected block is filled almost opaquely with the pastel
+    /// An unselected block is a light tint (≈25 %) over the window backdrop,
+    /// so in dark mode the backdrop is dark and the text must be light, and
+    /// vice versa. A selected block is filled almost opaquely with the pastel
     /// color, on which dark text reads well in both schemes.
     func eventTextColor(isSelected: Bool, colorScheme: ColorScheme) -> Color {
         if isSelected || colorScheme == .light {

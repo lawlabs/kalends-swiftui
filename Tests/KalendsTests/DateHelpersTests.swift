@@ -17,6 +17,14 @@ final class DateHelpersTests: XCTestCase {
         XCTAssertNil(weeks[4][6])
     }
 
+    func testTimeHasTwoDigitHoursOnA24HourClock() {
+        // DateText formats in the default time zone, so build the date there.
+        let morning = Calendar.current.date(bySettingHour: 8, minute: 15, second: 0, of: Date())!
+
+        XCTAssertEqual(DateText.time(morning, locale: Locale(identifier: "ru_RU")), "08:15")
+        XCTAssertTrue(DateText.time(morning, locale: Locale(identifier: "en_US")).hasPrefix("8:15"))
+    }
+
     func testDaysOfWeekStartAtFirstWeekday() {
         let days = calendar.daysOfWeek(containing: testDay(2026, 9, 19))
 

@@ -67,14 +67,13 @@ struct AllDaySection<Source: KalendsDataSource>: View {
                     .padding(.top, 8)
 
                 // Sized to its rows; only a long list scrolls within 100 pt.
-                ViewThatFits(in: .vertical) {
-                    rows(allDayEvents)
+                CappedHeightLayout(maxHeight: 100) {
                     ScrollView {
                         rows(allDayEvents)
                     }
+                    .scrollBounceBehavior(.basedOnSize)
                 }
                 .frame(maxWidth: .infinity)
-                .frame(maxHeight: 100)
                 .padding(.vertical, 8)
                 .background(DayBackground(date: day))
             }
@@ -100,5 +99,22 @@ struct AllDaySection<Source: KalendsDataSource>: View {
                     }
             }
         }
+    }
+}
+
+/// As tall as its content, but no taller than `maxHeight`. Unlike
+/// `.frame(maxHeight:)`, which grows to the limit whenever the parent offers
+/// more room, it never adds empty space below the content.
+private struct CappedHeightLayout: Layout {
+    var maxHeight: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let content = subviews.first else { return .zero }
+        let ideal = content.sizeThatFits(ProposedViewSize(width: proposal.width, height: nil))
+        return CGSize(width: proposal.width ?? ideal.width, height: min(ideal.height, maxHeight))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
     }
 }

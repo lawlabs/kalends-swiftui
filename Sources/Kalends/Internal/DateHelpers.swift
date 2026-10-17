@@ -136,8 +136,15 @@ extension Calendar {
 
 /// Locale-aware date strings used across the views.
 enum DateText {
+    /// “08:15” on a 24-hour clock, like the hour labels of the grid;
+    /// the locale's short time (“8:15 AM”) on a 12-hour one.
     static func time(_ date: Date, locale: Locale) -> String {
-        date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: locale))
+        switch locale.hourCycle {
+        case .zeroToTwentyThree, .oneToTwentyFour:
+            date.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits).locale(locale))
+        default:
+            date.formatted(Date.FormatStyle(date: .omitted, time: .shortened, locale: locale))
+        }
     }
 
     /// “5”

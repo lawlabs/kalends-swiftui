@@ -9,9 +9,10 @@ should behave the same on both platforms and be documented the same way.
 
 - **Layout algorithm (blocking for shared fixtures).** WinUI lays out
   overlapping events in equal lanes (`EventLane`: `lane`, `laneCount`); Swift
-  uses a cascade: events whose title bands overlap share the width, an event
-  starting inside a longer one is drawn narrower and shifted right
-  (`EventLayout`: `xFraction`, `widthFraction`, `overlapDepth`). The
+  follows Apple Calendar: events whose title bands overlap sit side by side,
+  an event starting inside a longer one covers its body right of its left
+  edge, and each event takes the widest free space (`EventLayout`:
+  `xFraction`, `widthFraction`, `overlapDepth`). The
   `tests/Fixtures/*.json` files of the WinUI repo therefore cannot be run
   against the Swift calculator. Decide on one canonical algorithm (the
   cascade keeps long events readable; lanes are simpler and match Outlook),

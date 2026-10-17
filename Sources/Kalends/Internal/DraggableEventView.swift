@@ -67,6 +67,9 @@ struct DraggableEventView<Event: KalendsEvent>: View {
     let onReschedule: (DateInterval) -> Void
     let onTap: () -> Void
     var visibleDays: [Date]? = nil
+    /// Cascade level from ``EventLayout/overlapDepth``; above 0 the block is
+    /// drawn over another one.
+    var overlapDepth: Int = 0
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.locale) private var locale
@@ -172,21 +175,13 @@ struct DraggableEventView<Event: KalendsEvent>: View {
                 .fill(color)
                 .frame(width: metrics.accentBarWidth)
 
-            VStack(alignment: .leading, spacing: metrics.contentSpacing) {
+            EventBlockContentLayout(spacing: metrics.contentSpacing) {
                 Text(displayTitle)
                     .font(metrics.titleFont)
                     .fontWeight(.semibold)
-                    .lineLimit(2)
                     .foregroundColor(textColor)
 
-                HStack(spacing: metrics.contentSpacing + 1) {
-                    Image(systemName: "clock")
-                        .font(metrics.clockFont)
-                    Text(timeText)
-                        .font(metrics.timeFont)
-                }
-                .foregroundColor(textColor.opacity(0.8))
-                .lineLimit(1)
+                timeLine
 
                 if metrics.showsSubtitle, let subtitle = event.subtitle, !subtitle.isEmpty {
                     Text(subtitle)
@@ -194,16 +189,20 @@ struct DraggableEventView<Event: KalendsEvent>: View {
                         .foregroundColor(textColor.opacity(0.7))
                         .lineLimit(1)
                 }
-
-                Spacer(minLength: 0)
             }
             .padding(.horizontal, metrics.horizontalPadding)
             .padding(.vertical, metrics.verticalPadding)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
+            // The tint goes over an opaque backdrop: a block drawn over
+            // another one hides it rather than mixing both texts.
             RoundedRectangle(cornerRadius: metrics.cornerRadius)
-                .fill(backgroundColor)
+                .fill(Color.kalendsEventBackdrop)
+                .overlay(
+                    RoundedRectangle(cornerRadius: metrics.cornerRadius)
+                        .fill(backgroundColor)
+                )
                 .opacity(isInteracting ? 0.6 : 1.0)
         )
         .clipShape(RoundedRectangle(cornerRadius: metrics.cornerRadius))
@@ -214,6 +213,17 @@ struct DraggableEventView<Event: KalendsEvent>: View {
                     lineWidth: isSelected ? 1.5 : (isInteracting ? 1 : 0)
                 )
         )
+        .background {
+            // A thin rim in the backdrop color sets a cascaded block off
+            // from the one it covers.
+            if overlapDepth > 0, !isInteracting {
+                RoundedRectangle(cornerRadius: metrics.cornerRadius + 1)
+                    .fill(Color.kalendsEventBackdrop)
+                    .padding(-1)
+            }
+        }
+        // Keeps back-to-back events of one calendar from merging.
+        .padding(.bottom, 1)
         .contentShape(Rectangle())
         .gesture(dragGesture, isEnabled: !event.isReadOnly)
         .onTapGesture {
@@ -227,6 +237,34 @@ struct DraggableEventView<Event: KalendsEvent>: View {
             return "\(start) — \(DateText.time(event.endDate, locale: locale))"
         }
         return start
+    }
+
+    /// The time line, shortened step by step to fit a narrow block: without
+    /// the clock, then the start time only, then nothing rather than a
+    /// truncated “1…”.
+    private var timeLine: some View {
+        ViewThatFits(in: .horizontal) {
+            timeLabel(timeText, showsClock: true)
+            timeLabel(timeText, showsClock: false)
+            if metrics.showsEndTime {
+                timeLabel(DateText.time(event.startDate, locale: locale), showsClock: false)
+            }
+            Color.clear.frame(width: 0, height: 0)
+        }
+    }
+
+    private func timeLabel(_ text: String, showsClock: Bool) -> some View {
+        HStack(spacing: metrics.contentSpacing + 1) {
+            if showsClock {
+                Image(systemName: "clock")
+                    .font(metrics.clockFont)
+            }
+            Text(text)
+                .font(metrics.timeFont)
+        }
+        .foregroundColor(textColor.opacity(0.8))
+        .lineLimit(1)
+        .fixedSize()
     }
 
     /// The badge with the new time while dragging or resizing.
@@ -440,7 +478,8 @@ struct DayColumnEvents<Source: KalendsDataSource>: View {
                 onTap: {
                     actions.selectEvent(layout.event)
                 },
-                visibleDays: visibleDays
+                visibleDays: visibleDays,
+                overlapDepth: layout.overlapDepth
             )
         }
     }

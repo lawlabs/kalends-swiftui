@@ -2,24 +2,25 @@ import Foundation
 
 /// Tunables of the day-column layout, in points.
 public struct EventLayoutConfiguration: Sendable, Hashable {
-    /// Gap between the blocks of side-by-side events.
-    public var horizontalSpacing: CGFloat
-    /// Height of the title band at the top of a block; blocks whose title
-    /// bands overlap are laid out side by side rather than cascaded.
+    /// Height of the title band at the top of a block. Events whose title
+    /// bands overlap are placed side by side; a later event is drawn over an
+    /// earlier one only below that event's title band.
     public var titleHeight: CGFloat
+    /// Narrowest space an event is placed in; narrower gaps are skipped.
     public var minEventWidth: CGFloat
+    /// Height of the shortest block. Shorter events are drawn this tall, so
+    /// the layout treats them as this tall too.
     public var minEventHeight: CGFloat
-    /// Horizontal shift of each further level of a cascade.
+    /// How far right of an earlier event's left edge a later event drawn over
+    /// it starts, so that edge and its accent bar stay visible.
     public var staggerOffset: CGFloat
 
     public init(
-        horizontalSpacing: CGFloat = 1,
         titleHeight: CGFloat = 20,
-        minEventWidth: CGFloat = 4,
-        minEventHeight: CGFloat = 16,
-        staggerOffset: CGFloat = 8
+        minEventWidth: CGFloat = 16,
+        minEventHeight: CGFloat = 20,
+        staggerOffset: CGFloat = 10
     ) {
-        self.horizontalSpacing = horizontalSpacing
         self.titleHeight = titleHeight
         self.minEventWidth = minEventWidth
         self.minEventHeight = minEventHeight
@@ -33,9 +34,11 @@ public struct EventLayout<Event: KalendsEvent>: Identifiable, Hashable {
     public let event: Event
     public let xFraction: CGFloat
     public let widthFraction: CGFloat
-    /// How many overlapping events sit “under” this one.
+    /// Cascade level: 0 when nothing is under this block, otherwise one more
+    /// than the deepest block it is drawn over.
     public let overlapDepth: Int
-    /// Size of the largest overlap group this event belongs to.
+    /// How many events share this block's title band side by side, itself
+    /// included.
     public let overlapStackCount: Int
     /// Draw order; later starts and deeper cascade levels go on top.
     public let zIndexPriority: Double
@@ -43,10 +46,20 @@ public struct EventLayout<Event: KalendsEvent>: Identifiable, Hashable {
     public var id: Event.ID { event.id }
 }
 
-/// Lays out the timed events of one day: events whose title bands overlap
-/// share the width side by side; an event starting inside the body of a
-/// longer one is cascaded — narrower and shifted right — so both titles stay
-/// visible.
+/// Lays out the timed events of one day the way Apple Calendar does:
+///
+/// - Events whose title bands overlap sit side by side and never cover each
+///   other.
+/// - A later event may cover the body of an earlier one, below its title
+///   band, starting ``EventLayoutConfiguration/staggerOffset`` right of its
+///   left edge. No block ever crosses the left edge of a block under it, so
+///   every title and accent bar stays visible.
+/// - Within these rules each event takes the widest space it can.
+///
+/// Events are placed in rows, earliest first: a row is an event together
+/// with the events starting within one title band of it. A row never moves
+/// the rows above it, so filling the afternoon does not reshuffle the
+/// morning.
 public enum EventLayoutCalculator {
     public static func layout<Event: KalendsEvent>(
         for events: [Event],
@@ -77,78 +90,46 @@ public enum EventLayoutCalculator {
         }
 
         let pointsPerSecond = hourHeight / 3600
-        let titleHeightInSeconds = TimeInterval(configuration.titleHeight / pointsPerSecond)
-
-        let descriptors = timedEvents.compactMap { event -> EventDescriptor<Event>? in
+        let blocks = timedEvents.compactMap { event -> Block<Event>? in
             guard let interval = displayInterval(for: event, startOfDay: startOfDay, endOfDay: endOfDay) else {
                 return nil
             }
-            let headerEnd = min(interval.end, interval.start.addingTimeInterval(titleHeightInSeconds))
-            let headerInterval = DateInterval(start: interval.start, end: max(headerEnd, interval.start.addingTimeInterval(1)))
-
-            return EventDescriptor(
+            let top = CGFloat(interval.start.timeIntervalSince(startOfDay)) * pointsPerSecond
+            let height = max(CGFloat(interval.duration) * pointsPerSecond, configuration.minEventHeight)
+            return Block(
                 event: event,
-                interval: interval,
-                headerInterval: headerInterval,
+                top: top,
+                bottom: top + height,
+                duration: interval.duration,
                 zIndexPriority: zIndexPriority(for: event, startOfDay: startOfDay)
             )
+        }.sorted(by: blockOrder)
+
+        var placements: [Placement<Event>] = []
+        var rowStart = 0
+        while rowStart < blocks.count {
+            var rowEnd = rowStart + 1
+            while rowEnd < blocks.count,
+                  blocks[rowEnd].top - blocks[rowStart].top < configuration.titleHeight {
+                rowEnd += 1
+            }
+            placements += placeRow(
+                blocks[rowStart ..< rowEnd],
+                over: placements,
+                width: containerWidth,
+                configuration: configuration
+            )
+            rowStart = rowEnd
         }
 
-        guard !descriptors.isEmpty else { return [] }
-
-        let metricsByEvent = calculateHeaderStackMetrics(
-            for: descriptors,
-            titleHeightInSeconds: titleHeightInSeconds
-        )
-        let bodyMetricsByEvent = calculateBodyStackMetrics(for: descriptors)
-
-        return descriptors.map { descriptor in
-            let headerMetrics = metricsByEvent[descriptor.event.id] ?? EventStackMetrics()
-            let bodyMetrics = bodyMetricsByEvent[descriptor.event.id] ?? EventStackMetrics()
-            let resolvedMetrics = resolveMetrics(header: headerMetrics, body: bodyMetrics)
-            let resolvedWidthFraction: CGFloat
-            let resolvedXFraction: CGFloat
-
-            if headerMetrics.maxStackCount > 1 {
-                resolvedWidthFraction = widthFraction(
-                    forStackCount: headerMetrics.maxStackCount,
-                    containerWidth: containerWidth,
-                    configuration: configuration
-                )
-                let maximumOriginFraction = max(1 - resolvedWidthFraction, 0)
-                resolvedXFraction = xFraction(
-                    forDepth: headerMetrics.depth,
-                    stackCount: headerMetrics.maxStackCount,
-                    maximumOriginFraction: maximumOriginFraction,
-                    containerWidth: containerWidth,
-                    configuration: configuration
-                )
-            } else if bodyMetrics.depth > 0 {
-                resolvedWidthFraction = bodyRevealWidthFraction(
-                    forStackCount: bodyMetrics.maxStackCount,
-                    containerWidth: containerWidth,
-                    configuration: configuration
-                )
-                let maximumOriginFraction = max(1 - resolvedWidthFraction, 0)
-                resolvedXFraction = bodyRevealXFraction(
-                    forDepth: bodyMetrics.depth,
-                    stackCount: bodyMetrics.maxStackCount,
-                    maximumOriginFraction: maximumOriginFraction,
-                    containerWidth: containerWidth,
-                    configuration: configuration
-                )
-            } else {
-                resolvedWidthFraction = 1
-                resolvedXFraction = 0
-            }
-
-            return EventLayout(
-                event: descriptor.event,
-                xFraction: resolvedXFraction,
-                widthFraction: resolvedWidthFraction,
-                overlapDepth: resolvedMetrics.depth,
-                overlapStackCount: resolvedMetrics.maxStackCount,
-                zIndexPriority: descriptor.zIndexPriority + Double(resolvedMetrics.depth) * 0.001
+        return placements.map { placement in
+            EventLayout(
+                event: placement.block.event,
+                xFraction: placement.x / containerWidth,
+                widthFraction: placement.width / containerWidth,
+                overlapDepth: placement.depth,
+                overlapStackCount: placement.rowCount,
+                zIndexPriority: placement.block.zIndexPriority + Double(placement.depth) * 0.001
             )
         }
     }
@@ -168,17 +149,36 @@ public enum EventLayoutCalculator {
 }
 
 private extension EventLayoutCalculator {
-    struct EventDescriptor<Event: KalendsEvent> {
+    /// An event's vertical extent in the column, in points from midnight.
+    struct Block<Event: KalendsEvent> {
         let event: Event
-        let interval: DateInterval
-        let headerInterval: DateInterval
+        let top: CGFloat
+        let bottom: CGFloat
+        let duration: TimeInterval
         let zIndexPriority: Double
     }
 
-    struct EventStackMetrics {
-        var depth: Int = 0
-        var maxStackCount: Int = 1
+    struct Placement<Event: KalendsEvent> {
+        let block: Block<Event>
+        let x: CGFloat
+        let width: CGFloat
+        let depth: Int
+        let rowCount: Int
+
+        func overlapsHorizontally(_ other: Placement<Event>) -> Bool {
+            x < other.x + other.width - EventLayoutCalculator.tolerance && other.x < x + width - EventLayoutCalculator.tolerance
+        }
     }
+
+    /// A horizontal span a row may use.
+    struct Slot {
+        let x: CGFloat
+        let width: CGFloat
+    }
+
+    /// Positions are compared with this margin so rounding never splits a
+    /// slot or breaks a tie.
+    static var tolerance: CGFloat { 0.01 }
 
     static func displayInterval<Event: KalendsEvent>(
         for event: Event,
@@ -197,226 +197,129 @@ private extension EventLayoutCalculator {
         max(0, event.startDate.timeIntervalSince(startOfDay))
     }
 
-    static func calculateHeaderStackMetrics<Event: KalendsEvent>(
-        for descriptors: [EventDescriptor<Event>],
-        titleHeightInSeconds: TimeInterval
-    ) -> [Event.ID: EventStackMetrics] {
-        let boundaries = Array(
-            Set(
-                descriptors.flatMap { descriptor in
-                    [
-                        descriptor.headerInterval.start.timeIntervalSinceReferenceDate,
-                        descriptor.headerInterval.end.timeIntervalSinceReferenceDate,
-                    ]
-                }
-            )
-        ).sorted()
-
-        guard boundaries.count >= 2 else {
-            return Dictionary(uniqueKeysWithValues: descriptors.map { ($0.event.id, EventStackMetrics()) })
-        }
-
-        var result: [Event.ID: EventStackMetrics] = [:]
-        for descriptor in descriptors {
-            result[descriptor.event.id] = EventStackMetrics()
-        }
-
-        for index in 0 ..< (boundaries.count - 1) {
-            let sliceStart = Date(timeIntervalSinceReferenceDate: boundaries[index])
-            let sliceEnd = Date(timeIntervalSinceReferenceDate: boundaries[index + 1])
-            guard sliceEnd > sliceStart else { continue }
-
-            let active = descriptors.filter { descriptor in
-                descriptor.headerInterval.start < sliceEnd && descriptor.headerInterval.end > sliceStart
-            }.sorted(by: descriptorPriority)
-
-            guard active.count > 1 else { continue }
-
-            for (depth, descriptor) in active.enumerated() {
-                var metrics = result[descriptor.event.id] ?? EventStackMetrics()
-                metrics.depth = max(metrics.depth, depth)
-                metrics.maxStackCount = max(metrics.maxStackCount, active.count)
-                result[descriptor.event.id] = metrics
-            }
-        }
-
-        let nearbyGroups = groupedByHeaderProximity(descriptors, titleHeightInSeconds: titleHeightInSeconds)
-        for group in nearbyGroups where group.count > 1 {
-            let sortedGroup = group.sorted(by: descriptorPriority)
-            for (depth, descriptor) in sortedGroup.enumerated() {
-                var metrics = result[descriptor.event.id] ?? EventStackMetrics()
-                metrics.depth = max(metrics.depth, depth)
-                metrics.maxStackCount = max(metrics.maxStackCount, group.count)
-                result[descriptor.event.id] = metrics
-            }
-        }
-
-        return result
-    }
-
-    static func calculateBodyStackMetrics<Event: KalendsEvent>(
-        for descriptors: [EventDescriptor<Event>]
-    ) -> [Event.ID: EventStackMetrics] {
-        let sorted = descriptors.sorted(by: descriptorPriority)
-        var result = Dictionary(uniqueKeysWithValues: sorted.map { ($0.event.id, EventStackMetrics()) })
-
-        for descriptor in sorted {
-            let activeAtStart = sorted.filter { other in
-                other.interval.start <= descriptor.interval.start &&
-                    other.interval.end > descriptor.interval.start
-            }
-
-            guard activeAtStart.count > 1 else { continue }
-
-            let orderedActive = activeAtStart.sorted(by: descriptorPriority)
-            guard let depth = orderedActive.firstIndex(where: { $0.event.id == descriptor.event.id }) else {
-                continue
-            }
-
-            var metrics = result[descriptor.event.id] ?? EventStackMetrics()
-            metrics.depth = max(metrics.depth, depth)
-            metrics.maxStackCount = max(metrics.maxStackCount, activeAtStart.count)
-            result[descriptor.event.id] = metrics
-        }
-
-        return result
-    }
-
-    static func groupedByHeaderProximity<Event: KalendsEvent>(
-        _ descriptors: [EventDescriptor<Event>],
-        titleHeightInSeconds: TimeInterval
-    ) -> [[EventDescriptor<Event>]] {
-        let sorted = descriptors.sorted(by: descriptorPriority)
-        var groups: [[EventDescriptor<Event>]] = []
-        var currentGroup: [EventDescriptor<Event>] = []
-        var currentGroupEnd: Date = .distantPast
-
-        for descriptor in sorted {
-            if currentGroup.isEmpty {
-                currentGroup = [descriptor]
-                currentGroupEnd = descriptor.headerInterval.end
-                continue
-            }
-
-            let delta = descriptor.interval.start.timeIntervalSince(currentGroup[0].interval.start)
-            if descriptor.headerInterval.start < currentGroupEnd || delta < titleHeightInSeconds {
-                currentGroup.append(descriptor)
-                currentGroupEnd = max(currentGroupEnd, descriptor.headerInterval.end)
-            } else {
-                groups.append(currentGroup)
-                currentGroup = [descriptor]
-                currentGroupEnd = descriptor.headerInterval.end
-            }
-        }
-
-        if !currentGroup.isEmpty {
-            groups.append(currentGroup)
-        }
-
-        return groups
-    }
-
     /// Earlier start first, then longer duration, then a stable tie-break on
     /// the identifier so the layout never flickers between runs.
-    static func descriptorPriority<Event: KalendsEvent>(
-        _ first: EventDescriptor<Event>,
-        _ second: EventDescriptor<Event>
-    ) -> Bool {
-        if first.interval.start == second.interval.start {
-            if first.interval.duration == second.interval.duration {
-                return String(describing: first.event.id) < String(describing: second.event.id)
-            }
-            return first.interval.duration > second.interval.duration
+    static func blockOrder<Event: KalendsEvent>(_ first: Block<Event>, _ second: Block<Event>) -> Bool {
+        if first.top != second.top {
+            return first.top < second.top
         }
-        return first.interval.start < second.interval.start
-    }
-
-    static func widthFraction(
-        forStackCount stackCount: Int,
-        containerWidth: CGFloat,
-        configuration: EventLayoutConfiguration
-    ) -> CGFloat {
-        guard stackCount > 1 else { return 1 }
-
-        let preferredFraction: CGFloat
-        switch stackCount {
-        case 2:
-            preferredFraction = 0.58
-        case 3:
-            preferredFraction = 0.46
-        default:
-            preferredFraction = max(0.34, 1 / CGFloat(stackCount))
+        if first.duration != second.duration {
+            return first.duration > second.duration
         }
-
-        let minimumFraction = configuration.minEventWidth / max(containerWidth, 1)
-        let spacingFraction = configuration.horizontalSpacing / max(containerWidth, 1)
-        return min(max(preferredFraction - spacingFraction, minimumFraction), 1)
+        return String(describing: first.event.id) < String(describing: second.event.id)
     }
 
-    static func bodyRevealWidthFraction(
-        forStackCount stackCount: Int,
-        containerWidth: CGFloat,
+    /// Places one row against the blocks already placed above it.
+    static func placeRow<Event: KalendsEvent>(
+        _ row: ArraySlice<Block<Event>>,
+        over placed: [Placement<Event>],
+        width: CGFloat,
         configuration: EventLayoutConfiguration
-    ) -> CGFloat {
-        guard stackCount > 1 else { return 1 }
+    ) -> [Placement<Event>] {
+        guard let rowTop = row.first?.top else { return [] }
 
-        let preferredFraction: CGFloat
-        switch stackCount {
-        case 2:
-            preferredFraction = 0.92
-        case 3:
-            preferredFraction = 0.86
-        default:
-            preferredFraction = max(0.78, 1 - 0.06 * CGFloat(stackCount - 1))
-        }
+        // Every placed block starts at or above the row, so it reaches the
+        // row exactly when it ends below the row's top.
+        let underneath = placed.filter { $0.block.bottom > rowTop }
+        // A block whose title band reaches the row must not be covered at
+        // all; the rest may be covered below their titles.
+        let blocking = underneath.filter { rowTop - $0.block.top < configuration.titleHeight }
+        let covered = underneath.filter { rowTop - $0.block.top >= configuration.titleHeight }
 
-        let minimumFraction = configuration.minEventWidth / max(containerWidth, 1)
-        let spacingFraction = configuration.horizontalSpacing / max(containerWidth, 1)
-        return min(max(preferredFraction - spacingFraction, minimumFraction), 1)
-    }
-
-    static func xFraction(
-        forDepth depth: Int,
-        stackCount: Int,
-        maximumOriginFraction: CGFloat,
-        containerWidth: CGFloat,
-        configuration: EventLayoutConfiguration
-    ) -> CGFloat {
-        guard stackCount > 1, depth > 0 else { return 0 }
-
-        let staggerFraction = configuration.staggerOffset / max(containerWidth, 1)
-        let evenlyDistributedFraction = maximumOriginFraction / CGFloat(stackCount - 1)
-        let stepFraction = max(evenlyDistributedFraction, staggerFraction)
-        return min(CGFloat(depth) * stepFraction, maximumOriginFraction)
-    }
-
-    static func bodyRevealXFraction(
-        forDepth depth: Int,
-        stackCount: Int,
-        maximumOriginFraction: CGFloat,
-        containerWidth: CGFloat,
-        configuration: EventLayoutConfiguration
-    ) -> CGFloat {
-        guard stackCount > 1, depth > 0 else { return 0 }
-
-        let baseStepFraction = max((configuration.staggerOffset * 1.25) / max(containerWidth, 1), 0.04)
-        let depthMultiplier: CGFloat
-        switch depth {
-        case 1:
-            depthMultiplier = 1
-        case 2:
-            depthMultiplier = 1.7
-        default:
-            depthMultiplier = 2.2 + CGFloat(max(depth - 3, 0)) * 0.35
-        }
-
-        return min(baseStepFraction * depthMultiplier, maximumOriginFraction)
-    }
-
-    static func resolveMetrics(header: EventStackMetrics, body: EventStackMetrics) -> EventStackMetrics {
-        EventStackMetrics(
-            depth: max(header.depth, body.depth),
-            maxStackCount: max(header.maxStackCount, body.maxStackCount)
+        var slots = freeSlots(
+            width: width,
+            blocking: blocking,
+            covered: covered,
+            staggerOffset: configuration.staggerOffset,
+            minimumWidth: configuration.minEventWidth
         )
+        if slots.isEmpty {
+            // A crowded narrow column: covering a title is better than
+            // dropping the event.
+            slots = freeSlots(
+                width: width,
+                blocking: [],
+                covered: underneath,
+                staggerOffset: configuration.staggerOffset,
+                minimumWidth: 1
+            )
+        }
+        if slots.isEmpty {
+            slots = [Slot(x: 0, width: width)]
+        }
+
+        // Each event takes the slot that leaves it the most width; a tie
+        // goes to the leftmost slot.
+        var members = Array(repeating: [Block<Event>](), count: slots.count)
+        for block in row {
+            var best = 0
+            var bestShare = -CGFloat.infinity
+            for (index, slot) in slots.enumerated() {
+                let share = slot.width / CGFloat(members[index].count + 1)
+                if share > bestShare + tolerance {
+                    best = index
+                    bestShare = share
+                }
+            }
+            members[best].append(block)
+        }
+
+        var result: [Placement<Event>] = []
+        for (slot, blocks) in zip(slots, members) where !blocks.isEmpty {
+            let share = slot.width / CGFloat(blocks.count)
+            for (index, block) in blocks.enumerated() {
+                let candidate = Placement(
+                    block: block,
+                    x: slot.x + share * CGFloat(index),
+                    width: share,
+                    depth: 0,
+                    rowCount: row.count
+                )
+                let depth = underneath
+                    .filter { $0.block.bottom > block.top && candidate.overlapsHorizontally($0) }
+                    .map { $0.depth + 1 }
+                    .max() ?? 0
+                result.append(Placement(
+                    block: block,
+                    x: candidate.x,
+                    width: candidate.width,
+                    depth: depth,
+                    rowCount: row.count
+                ))
+            }
+        }
+        return result
+    }
+
+    /// The spans of `0 ..< width` a row may use: outside every blocking
+    /// block, and never across the left edge of a covered one. A span that
+    /// starts at such an edge is shifted right by `staggerOffset`.
+    static func freeSlots<Event: KalendsEvent>(
+        width: CGFloat,
+        blocking: [Placement<Event>],
+        covered: [Placement<Event>],
+        staggerOffset: CGFloat,
+        minimumWidth: CGFloat
+    ) -> [Slot] {
+        let edges = ([0, width] + covered.map(\.x) + blocking.flatMap { [$0.x, $0.x + $0.width] })
+            .map { min(max($0, 0), width) }
+            .sorted()
+        var uniqueEdges: [CGFloat] = []
+        for edge in edges where uniqueEdges.last.map({ edge - $0 > tolerance }) ?? true {
+            uniqueEdges.append(edge)
+        }
+
+        var slots: [Slot] = []
+        for (left, right) in zip(uniqueEdges, uniqueEdges.dropFirst()) {
+            let isBlocked = blocking.contains { $0.x < right - tolerance && $0.x + $0.width > left + tolerance }
+            guard !isBlocked else { continue }
+
+            let coversLeftEdge = covered.contains { abs($0.x - left) <= tolerance }
+            let inset = coversLeftEdge ? staggerOffset : 0
+            let slotWidth = right - left - inset
+            guard slotWidth >= minimumWidth else { continue }
+            slots.append(Slot(x: left + inset, width: slotWidth))
+        }
+        return slots
     }
 }
