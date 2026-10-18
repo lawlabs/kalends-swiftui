@@ -41,7 +41,8 @@ public struct WeekView<Source: KalendsDataSource>: View {
         }
     }
 
-    /// Two hours before now when the week contains today, else 8:00.
+    /// Where the timeline opens before the user has scrolled it: two hours
+    /// before now when the week contains today, else 8:00.
     private var initialScrollHour: Int {
         if daysOfWeek.contains(where: { calendar.isDateInToday($0) }) {
             return max(0, calendar.component(.hour, from: Date()) - 2)
@@ -51,38 +52,22 @@ public struct WeekView<Source: KalendsDataSource>: View {
 
     public var body: some View {
         // The header sits above the scroll view rather than as a pinned
-        // section header inside it, so `scrollTo(hour)` lands exactly on
-        // that hour instead of under the header.
+        // section header inside it, so a scroll offset of N hours puts
+        // exactly that hour at the top instead of under the header.
         VStack(spacing: 0) {
             weekHeader
 
-            ScrollViewReader { proxy in
-                ScrollView {
-                    WeekGrid(
-                        source: source,
-                        daysOfWeek: daysOfWeek,
-                        hours: hours,
-                        hourHeight: hourHeight,
-                        selectedEventID: selectedEventID,
-                        actions: actions
-                    )
-                    .background(
-                        VStack(spacing: 0) {
-                            ForEach(hours, id: \.self) { hour in
-                                Color.clear
-                                    .frame(height: hourHeight)
-                                    .id("week-hour-\(hour)")
-                            }
-                        }
-                    )
-                }
-                .onAppear {
-                    let hour = initialScrollHour
-                    Task { @MainActor in
-                        proxy.scrollTo("week-hour-\(hour)", anchor: .top)
-                    }
-                }
+            ScrollView {
+                WeekGrid(
+                    source: source,
+                    daysOfWeek: daysOfWeek,
+                    hours: hours,
+                    hourHeight: hourHeight,
+                    selectedEventID: selectedEventID,
+                    actions: actions
+                )
             }
+            .timelineScroll(hourHeight: hourHeight) { initialScrollHour }
         }
     }
 

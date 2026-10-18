@@ -2,6 +2,9 @@ import SwiftUI
 
 /// One view for all four modes, for hosts that switch with a single control.
 ///
+/// The day and week modes share their scroll position: switching between
+/// them, or to the month and back, keeps the hour the user scrolled to.
+///
 /// ```swift
 /// KalendsView(mode: mode, source: store, selectedDate: $date)
 /// ```
@@ -15,6 +18,8 @@ public struct KalendsView<Source: KalendsDataSource>: View {
     private let yearStyle: YearViewStyle
     private let hourHeight: CGFloat
     private let actions: KalendsActions<Source.Event>
+
+    @State private var timelineScroll = TimelineScrollMemory()
 
     public init(
         mode: KalendsMode,
@@ -39,6 +44,12 @@ public struct KalendsView<Source: KalendsDataSource>: View {
     }
 
     public var body: some View {
+        modeView
+            .environment(\.kalendsTimelineScroll, timelineScroll)
+    }
+
+    @ViewBuilder
+    private var modeView: some View {
         switch mode {
         case .day:
             DayView(

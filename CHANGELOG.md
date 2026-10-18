@@ -18,6 +18,7 @@ and the project adheres to [Semantic Versioning](https://semver.org).
 - Event blocks are opaque, so a block drawn over another hides its text. A cascaded block has a thin rim, back-to-back events keep a 1-point gap.
 - An event title wraps into the part of its block that no later block covers (`EventLayout.visibleHeight`); the time line is shown only when it fits there under one title line, so a covering block never cuts it in half, and in a narrow block it drops the clock, then the end time, then itself.
 - Times on a 24-hour clock have two-digit hours (“08:15”), matching the hour labels.
+- The day and week timelines keep the hour the user scrolled to. In `KalendsView` the two modes share it, so switching between them, or to the month and back, opens at the same time of day without scrolling there visibly; the first opening still goes to two hours before now (today) or 8:00.
 
 ### Fixed
 

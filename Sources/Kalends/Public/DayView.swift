@@ -3,8 +3,10 @@ import SwiftUI
 /// One day as a 24-hour timeline with an all-day section above it.
 ///
 /// Events can be dragged and resized; double-tapping empty space creates an
-/// event, dragging on empty space draws one. The timeline opens scrolled to
-/// two hours before now on today and to 8:00 on other days.
+/// event, dragging on empty space draws one. The timeline first opens
+/// scrolled to two hours before now on today and to 8:00 on other days, and
+/// then keeps the hour the user scrolled to; inside ``KalendsView`` that
+/// hour is shared with the week view.
 public struct DayView<Source: KalendsDataSource>: View {
     private let source: Source
     @Binding private var selectedDate: Date
@@ -56,7 +58,8 @@ public struct DayView<Source: KalendsDataSource>: View {
         calendar.isDateInToday(selectedDate)
     }
 
-    /// Like Apple Calendar: two hours before now on today, 8:00 otherwise.
+    /// Where the timeline opens before the user has scrolled it, like Apple
+    /// Calendar: two hours before now on today, 8:00 otherwise.
     private var initialScrollHour: Int {
         if isToday {
             return max(0, calendar.component(.hour, from: Date()) - 2)
@@ -80,65 +83,47 @@ public struct DayView<Source: KalendsDataSource>: View {
                     timeColumnWidth: timeColumnWidth
                 )
 
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        let columnWidth = max(0, geometry.size.width - timeColumnWidth)
-                        ZStack(alignment: .topLeading) {
-                            HStack(spacing: 0) {
-                                HourLabelsColumn(hours: hours, hourHeight: hourHeight, trailingPadding: 8)
-                                TimeGridLines(hourHeight: hourHeight, hourCount: hours.count, columnCount: 1)
-                                    .background(DayBackground(date: selectedDate))
-                            }
+                ScrollView {
+                    let columnWidth = max(0, geometry.size.width - timeColumnWidth)
+                    ZStack(alignment: .topLeading) {
+                        HStack(spacing: 0) {
+                            HourLabelsColumn(hours: hours, hourHeight: hourHeight, trailingPadding: 8)
+                            TimeGridLines(hourHeight: hourHeight, hourCount: hours.count, columnCount: 1)
+                                .background(DayBackground(date: selectedDate))
+                        }
 
-                            TimeGridCreationOverlay(
+                        TimeGridCreationOverlay(
+                            day: selectedDate,
+                            hourHeight: hourHeight,
+                            hourCount: hours.count,
+                            actions: actions
+                        )
+                        .frame(width: columnWidth, height: CGFloat(hours.count) * hourHeight)
+                        .offset(x: timeColumnWidth)
+
+                        ZStack(alignment: .topLeading) {
+                            DayColumnEvents(
+                                source: source,
                                 day: selectedDate,
                                 hourHeight: hourHeight,
-                                hourCount: hours.count,
+                                containerWidth: columnWidth,
+                                dayWidth: nil,
+                                style: .day,
+                                selectedEventID: selectedEventID,
                                 actions: actions
                             )
-                            .frame(width: columnWidth, height: CGFloat(hours.count) * hourHeight)
-                            .offset(x: timeColumnWidth)
-
-                            ZStack(alignment: .topLeading) {
-                                DayColumnEvents(
-                                    source: source,
-                                    day: selectedDate,
-                                    hourHeight: hourHeight,
-                                    containerWidth: columnWidth,
-                                    dayWidth: nil,
-                                    style: .day,
-                                    selectedEventID: selectedEventID,
-                                    actions: actions
-                                )
-                            }
-                            .padding(.leading, timeColumnWidth)
-
-                            if isToday {
-                                CurrentTimeIndicator(hourHeight: hourHeight)
-                            }
                         }
-                        .frame(minHeight: CGFloat(hours.count) * hourHeight)
-                        .background(
-                            VStack(spacing: 0) {
-                                ForEach(hours, id: \.self) { hour in
-                                    Color.clear
-                                        .frame(height: hourHeight)
-                                        .id("hour-\(hour)")
-                                }
-                            }
-                        )
-                    }
-                    .onAppear {
-                        let hour = initialScrollHour
-                        Task { @MainActor in
-                            withAnimation(.easeOut(duration: 0.3)) {
-                                proxy.scrollTo("hour-\(hour)", anchor: .top)
-                            }
+                        .padding(.leading, timeColumnWidth)
+
+                        if isToday {
+                            CurrentTimeIndicator(hourHeight: hourHeight)
                         }
                     }
-                    // Changing the date keeps the scroll position: the user
-                    // stays on the same hour, like Apple Calendar.
+                    .frame(minHeight: CGFloat(hours.count) * hourHeight)
                 }
+                // Changing the date, or switching to another mode and back,
+                // keeps the hour the user scrolled to, like Apple Calendar.
+                .timelineScroll(hourHeight: hourHeight) { initialScrollHour }
             }
         }
     }
